@@ -4,6 +4,7 @@ const userModel = require("../model/userModel");
 
 const reviewModel = require("../model/reviewModel.js");
 const moment = require("moment");
+const aws= require("aws-sdk")
 
 const isValid = function (value) {
   if (typeof value === "undefined" || value === null) return false;
@@ -13,15 +14,43 @@ const isValid = function (value) {
 const isValidRequestBody = function (body) {
   return Object.keys(body).length > 0;
 };
+aws.config.update({
+  accessKeyId: "AKIAY3L35MCRUJ6WPO6J",
+    secretAccessKey: "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",
+  region: "ap-south-1"
+})
+
+let uploadFile= async ( file) =>{
+  return new Promise( function(resolve, reject) {
+
+   let s3= new aws.S3({apiVersion: '2006-03-01'});
+
+   var uploadParams= {
+       ACL: "public-read",
+       Bucket: "classroom-training-bucket",  //HERE
+       Key: "abc/" + file.originalname, //HERE 
+       Body: file.buffer
+   }
+
+   s3.upload( uploadParams, function (err, data ){
+       if(err) {
+           return reject({"error": err})
+       }
+       console.log(data)
+       console.log("file uploaded succesfully")
+       return resolve(data.Location)
+   })
+
+  })
+}
 
 const createBook = async function (req, res) {
   try {
     let body = req.body;
+    //console.log(body)
+    let files= req.files
     const userToken = req.userId;
 
-    if (Object.keys(req.query).length !== 0) {
-      return res.status(400).send({ status: false, msg: "filtering not allow" });
-    }
 
     if (!isValidRequestBody(body)) {
       return res.status(400).send({
@@ -29,6 +58,16 @@ const createBook = async function (req, res) {
         message: "Invalid request parameters please provide books details",
       });
     }
+
+    if(files && files.length>0){
+
+      let uploadedFileURL= await uploadFile( files[0] )
+      body.bookCover = uploadedFileURL
+     
+  }
+  else{
+      res.status(400).send({ msg: "No file found" })
+  }
 
     let required = ["title","excerpt","userId","ISBN","category","subcategory","releasedAt"];
     let keys = Object.keys(body);
